@@ -1,8 +1,19 @@
 # OIDC Token Authentication PowerShell Module
 
-This PowerShell module contains the Get-PiWebToken function that allows you to retrieve a PiWeb token. The module uses the [PSAuthClient](https://github.com/alflokken/PSAuthClient) module to perform authentication against the external OIDC Identity Provider configured in PiWeb Server. The token can be used for authentication with the [PiWeb API](https://zeiss-piweb.github.io/PiWeb-Api/general).
+This PowerShell module contains the `Get-PiWebToken` function that allows you to retrieve a PiWeb token. The module uses the [PSAuthClient](https://github.com/alflokken/PSAuthClient) module to perform authentication against the external OIDC Identity Provider configured in PiWeb Server. The token can be used for authentication with the [PiWeb API](https://zeiss-piweb.github.io/PiWeb-Api/general).
 
-⚠ **Warning:** Please note that the token is stored in plain text in the token.json file. You are responsible for encrypting the file yourself.
+## Security
+
+🔒 **Token Storage:** The token is stored encrypted on disk using the [Windows Data Protection API (DPAPI)](https://learn.microsoft.com/en-us/dotnet/standard/security/how-to-use-data-protection). This means:
+
+- The token can only be decrypted by the **same Windows user** on the **same machine** where it was encrypted.
+- The encryption is tied to your Windows user credentials.
+- No additional password or key management is required.
+
+## Requirements
+
+- PowerShell 7+ (Windows only for DPAPI support)
+- [PSAuthClient](https://github.com/alflokken/PSAuthClient) module
 
 ## Prerequisites
 

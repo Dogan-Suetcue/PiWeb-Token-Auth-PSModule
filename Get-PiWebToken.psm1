@@ -1,18 +1,23 @@
+using module ".\PiWeb.PowerShell.dll"
+
+#requires -Version 7.5
+#requires -PSEdition Core
+
 $ErrorActionPreference = 'Stop'
 
 $global:ERROR_REPORT_PATH = "$($PSScriptRoot)\Error.log"
-$global:TOKEN_PATH = "$($PSScriptRoot)\token.json"
+$global:TOKEN_PATH = Join-Path -Path $env:APPDATA -ChildPath "Zeiss\PiWeb\PowerShell\token.dat"
 
 function Get-PiWebToken ([string]$baseAddress) {
     Get-PSAuthClientModule
 
     if (Test-Path -Path $global:TOKEN_PATH) {
-        $token = Get-Content -Path $global:TOKEN_PATH | ConvertFrom-Json
+        $token =  Get-PiWebTokenFromStore
+    
+        if ($null -ne $token -and ([System.DateTime]::Now -ge $token.expiry_datetime) -and ($token.scope.Contains("offline_access"))) {
+            $updatedToken = Update-PiWebToken $token $baseAddress
 
-        if (([System.DateTime]::Now -ge $token.expiry_datetime) -and ($token.scope.Contains("offline_access"))) {
-            $updatedToken = Update-PiWebToken $token
-
-            Save-Token $global:TOKEN_PATH $updatedToken
+            $updatedToken | Save-PiWebTokenInStore
 
             return $updatedToken
         }
@@ -23,7 +28,7 @@ function Get-PiWebToken ([string]$baseAddress) {
     else {
         $token = New-PiWebToken $baseAddress
 
-        Save-Token $global:TOKEN_PATH $token
+        $token | Save-PiWebTokenInStore
 
         return $token
     }
@@ -47,10 +52,18 @@ function Get-PSAuthClientModule {
 
 function Update-PiWebToken ([PSCustomObject]$token, [string]$baseAddress) {
     try {
-        $openIdConfiguration = Get-OpenIdConfiguration $baseAddress
-        $token | Add-Member -MemberType NoteProperty -Name "uri" -Value $openIdConfiguration.token_endpoint
-        $token | Add-Member -MemberType NoteProperty -Name $global:CLIENT_ID.Name -Value $global:CLIENT_ID.Value
-        $token = Invoke-OAuth2TokenEndpoint -uri $token.uri -client_id $token.client_id -refresh_token $token.refresh_token -scope $token.scope
+        $openIdConfiguration = Get-OpenIdConfiguration $baseAddress   
+        $oAuthConfiguration  = Get-OAuthConfiguration $baseAddress
+
+        $params = @{
+            uri = $openIdConfiguration.token_endpoint
+            client_id = $oAuthConfiguration.upstreamTokenInformation.clientId
+            refresh_token = $token.refresh_token
+            scope = $token.scope
+        }
+
+        $token = Invoke-OAuth2TokenEndpoint @params
+
         return $token   
     }
     catch {
@@ -87,10 +100,6 @@ function New-PiWebToken ([string]$baseAddress) {
     }
 }
 
-function Save-Token([string]$tokenPath, [PSCustomObject]$token) {
-    Set-Content -Path $tokenPath -Value ($token | ConvertTo-Json)
-}
-
 function Get-OAuthConfiguration([string]$baseAddress) {
     try {
         $oAuthConfigurationUrl  = "$($baseAddress)/OAuthServiceRest/oAuthConfiguration"
@@ -110,6 +119,7 @@ function Get-OpenIdConfiguration ([string]$baseAddress) {
 
         $openIdUrl = "$($response.upstreamTokenInformation.openIdAuthority)/.well-known/openid-configuration"
         $openIdConfiguration = Invoke-RestMethod -Method Get -Uri $openIdUrl
+
         return $openIdConfiguration
     }
     catch {
