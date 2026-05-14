@@ -1,7 +1,7 @@
-using module ".\PiWeb.PowerShell.dll"
-
 #requires -Version 7.5
 #requires -PSEdition Core
+
+using module .\bin\PiWeb.PowerShell.TokenStore.dll
 
 $ErrorActionPreference = 'Stop'
 
